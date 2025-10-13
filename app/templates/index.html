@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IT Service Desk Scheduler</title>
+    <style>
+        body {
+            background-color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 60px;
+        }
+        .logo {
+            width: 160px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 80px;
+        }
+        .login-section {
+            margin-top: 40px;
+        }
+        .login-section h2 {
+            font-size: 20px;
+            margin-bottom: 30px;
+        }
+        .login-buttons button {
+            margin: 10px;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            background-color: #003366;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .login-buttons button:hover {
+            background-color: #0055a5;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ithaca College Logo -->
+    <img src="static/ithaca_logo.png" alt="Ithaca College Logo" class="logo">
+
+    <!-- Title -->
+    <h1>IT Service Desk Scheduler</h1>
+
+    <!-- Login Section -->
+    <div class="login-section">
+        <h2>Please log in</h2>
+        <div class="login-buttons">
+            <button onclick="location.href='manager_login.html'">I am a manager</button>
+            <button onclick="location.href='student_login.html'">I am a student</button>
+        </div>
+    </div>
+
+</body>
+</html>
