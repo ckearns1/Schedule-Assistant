@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Class Schedule Selector</title>
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            background-color: white;
+        }
+
+        .container {
+            display: flex;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .left-panel {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            border-right: 2px solid #ccc;
+        }
+
+        .right-panel {
+            flex: 1;
+            padding: 40px;
+        }
+
+        .splitter {
+            width: 5px;
+            background-color: #ccc;
+            cursor: col-resize;
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 100px repeat(7, 1fr);
+            border-collapse: collapse;
+        }
+
+        .schedule-grid div {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .schedule-grid .header {
+            font-weight: bold;
+            background-color: #f0f0f0;
+            cursor: default;
+        }
+
+        .selected {
+            background-color: #007BFF;
+            color: white;
+        }
+
+        .right-panel h2 {
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 300px;
+            font-size: 14px;
+            padding: 10px;
+            resize: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="left-panel">
+        <div class="schedule-grid" id="schedule">
+            <!-- Header Row -->
+            <div class="header">Time</div>
+            <div class="header">Monday</div>
+            <div class="header">Tuesday</div>
+            <div class="header">Wednesday</div>
+            <div class="header">Thursday</div>
+            <div class="header">Friday</div>
+            <div class="header">Saturday</div>
+            <div class="header">Sunday</div>
+
+            <!-- Time Slots -->
+            {% set schedule = {
+                'Monday': [
+                    '7:55-8:55 am', '8:55-9:55 am', '9:55-10:55 am', '10:55-11:55 am',
+                    '11:55-12:55 pm', '12:55-1:55 pm', '1:55-2:55 pm', '2:55-4:00 pm',
+                    '4:00-5:00 pm', '5:00-6:00 pm', '6:00-7:00 pm'
+                ],
+                'Tuesday': [
+                    '7:55-9:20 am', '9:20-10:45 am', '10:45-12:10 pm', '12:10-1:05 pm',
+                    '1:05-2:30 pm', '2:30-3:55 pm', '3:55-5:20 pm', '5:20-7:00 pm'
+                ],
+                'Wednesday': [
+                    '7:55-8:55 am', '8:55-9:55 am', '9:55-10:55 am', '10:55-11:55 am',
+                    '11:55-12:55 pm', '12:55-1:55 pm', '1:55-2:55 pm', '2:55-4:00 pm',
+                    '4:00-5:00 pm', '5:00-6:00 pm', '6:00-7:00 pm'
+                ],
+                'Thursday': [
+                    '7:55-9:20 am', '9:20-10:45 am', '10:45-12:10 pm', '12:10-1:05 pm',
+                    '1:05-2:30 pm', '2:30-3:55 pm', '3:55-5:20 pm', '5:20-7:00 pm'
+                ],
+                'Friday': [
+                    '7:55-8:55 am', '8:55-9:55 am', '9:55-10:55 am', '10:55-11:55 am',
+                    '11:55-12:55 pm', '12:55-1:55 pm', '1:55-2:55 pm', '2:55-4:00 pm',
+                    '4:00-5:00 pm'
+                ],
+                'Saturday': [],
+                'Sunday': ['12:00-5:00 pm']
+            } %}
+
+            {% set all_times = [
+                '7:55-8:55 am', '8:55-9:55 am', '9:55-10:55 am', '10:55-11:55 am',
+                '11:55-12:55 pm', '12:55-1:55 pm', '1:55-2:55 pm', '2:55-4:00 pm',
+                '4:00-5:00 pm', '5:00-6:00 pm', '6:00-7:00 pm', '12:00-5:00 pm'
+            ] %}
+
+            {% for time in all_times %}
+                <div class="header">{{ time }}</div>
+                {% for day in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+                    {% if time in schedule[day] %}
+                        <div class="slot" data-time="{{ day }} {{ time }}"></div>
+                    {% else %}
+                        <div></div>
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="splitter" id="splitter"></div>
+
+    <div class="right-panel">
+        <h2>Select the times you HAVE class</h2>
+        <textarea id="selectedTimes" readonly></textarea>
+    </div>
+</div>
+
+<script>
+    const slots = document.querySelectorAll('.slot');
+    const output = document.getElementById('selectedTimes');
+    const selected = new Set();
+
+    slots.forEach(slot => {
+        slot.addEventListener('click', () => {
+            const time = slot.getAttribute('data-time');
+            if (selected.has(time)) {
+                selected.delete(time);
+                slot.classList.remove('selected');
+            } else {
+                selected.add(time);
+                slot.classList.add('selected');
+            }
+            output.value = Array.from(selected).join('\n');
+        });
+    });
+
+    const splitter = document.getElementById('splitter');
+    const container = document.querySelector('.container');
+    let isDragging = false;
+
+    splitter.addEventListener('mousedown', () => {
+        isDragging = true;
+        document.body.style.cursor = 'col-resize';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const offset = e.clientX;
+        const totalWidth = container.offsetWidth;
+        const leftWidth = offset;
+        const rightWidth = totalWidth - offset - splitter.offsetWidth;
+        container.children[0].style.flex = `0 0 ${leftWidth}px`;
+        container.children[2].style.flex = `0 0 ${rightWidth}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+        document.body.style.cursor = 'default';
+    });
+</script>
+
+</body>
+</html>

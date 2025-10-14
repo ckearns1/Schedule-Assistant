@@ -43,18 +43,15 @@
 </head>
 <body>
 
-    <!-- Ithaca College Logo -->
-    <img src="static/ithaca_logo.png" alt="Ithaca College Logo" class="logo">
+    <img src="{{ url_for('static', filename='ithaca_logo.png') }}" alt="Ithaca College Logo" class="logo">
 
-    <!-- Title -->
     <h1>IT Service Desk Scheduler</h1>
 
-    <!-- Login Section -->
     <div class="login-section">
         <h2>Please log in</h2>
         <div class="login-buttons">
-            <button onclick="location.href='manager_login.html'">I am a manager</button>
-            <button onclick="location.href='student_login.html'">I am a student</button>
+            <button onclick="location.href='/set_role/manager'">I am a manager</button>
+            <button onclick="location.href='/set_role/student'">I am a student</button>
         </div>
     </div>
 

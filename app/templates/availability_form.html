@@ -1,0 +1,20 @@
+<!-- [head and styles omitted for brevity — use previous version] -->
+<body>
+
+    <div class="role-banner">
+        Logged in as {{ role }}
+    </div>
+
+    <h1>Service Desk Availability Form</h1>
+
+    <div class="intro">
+        <p>Please fill out this form according to your availability.</p>
+        <p><em>*Disclaimer:</em> All answers provided will <strong>NOT</strong> be seen by anyone, coworker or manager. This data will only be used by the AI agents to help create the most optimal schedule.</p>
+    </div>
+
+    <form action="/submit_availability" method="post">
+        <!-- [schedule dictionary and form loop — use previous version] -->
+        <button type="submit">Submit and Continue</button>
+    </form>
+
+</body>
