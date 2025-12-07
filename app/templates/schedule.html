@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Spring 2025 Schedule</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f9f9f9; }
+
+        /* Navigation Bar */
+        .nav { margin-bottom: 20px; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav a { margin-right: 15px; text-decoration: none; color: #003366; font-weight: bold; }
+        .nav span { float: right; color: #666; }
+
+        /* Schedule Grid */
+        table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; vertical-align: top; width: 12%; }
+        th { background-color: #003366; color: white; padding: 12px; }
+
+        /* Time Column */
+        td:first-child { font-weight: bold; background: #f4f4f4; width: 8%; }
+
+        /* Name Tags */
+        .cell-content { display: flex; flex-direction: column; gap: 4px; }
+        .name-tag {
+            background: #e3f2fd;
+            color: #0d47a1;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            border-left: 3px solid #2196f3;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="nav">
+        <a href="/">← Back to Login</a>
+        <a href="/schedule">Refresh Schedule</a>
+        <span>Viewing as: <strong>{{ role|title }}</strong> | Version: {{ version }}</span>
+    </div>
+
+    <h1>📅 Spring 2025 Schedule</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                {% for day in days %}
+                <th>{{ day }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for hour in hours %}
+            <tr>
+                <td>
+                    {% if hour > 12 %} {{ hour - 12 }} PM
+                    {% elif hour == 12 %} 12 PM
+                    {% else %} {{ hour }} AM
+                    {% endif %}
+                </td>
+                {% for day in days %}
+                <td>
+                    <div class="cell-content">
+                        {% for name in schedule[hour][day] %}
+                            <span class="name-tag">{{ name }}</span>
+                        {% endfor %}
+                    </div>
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>
