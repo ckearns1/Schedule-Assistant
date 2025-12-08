@@ -1,184 +1,168 @@
 import pandas as pd
-import re
 import sys
 import os
+from datetime import datetime
 
 # --- 1. Setup Path ---
-# This ensures we can find the 'app' folder
 sys.path.append(os.getcwd())
 
 # --- 2. Import App Modules ---
-# If this fails, it will show the real error (like "No module named sqlalchemy")
 from app.db import SessionLocal, engine
 from app.models import Employee, Schedule, ScheduleEntry, Base
 
-# Create tables if they don't exist
+# Create tables
 Base.metadata.create_all(bind=engine)
 
 
-def parse_time_to_hour(time_str):
+def parse_time_string(time_str):
     """
-    Converts '7:55', '9:20', '2:55' into a 24-hour integer (0-23).
+    Parses strings like '7:55am', '12: 00pm', '1pm'.
+    Handles typos like extra spaces.
     """
-    if not isinstance(time_str, str): return None
-    time_str = time_str.lower().strip()
+    # 1. Clean the string: remove ALL spaces
+    if not isinstance(time_str, str):
+        return None
 
-    # Extract numbers (e.g., 7:55 -> [7, 55])
-    nums = re.findall(r'\d+', time_str)
-    if not nums: return None
+    clean_str = time_str.replace(" ", "").strip().lower()  # "12: 00pm" -> "12:00pm"
 
-    hour = int(nums[0])
-    minute = int(nums[1]) if len(nums) > 1 else 0
+    # 2. Try parsing with minutes
+    try:
+        dt = datetime.strptime(clean_str, "%I:%M%p")
+        return dt
+    except ValueError:
+        pass
 
-    # Rounding logic: If > 45 mins, round up to next hour (7:55 -> 8)
-    if minute > 45:
-        hour += 1
+    # 3. Try parsing without minutes (e.g. "1pm")
+    try:
+        dt = datetime.strptime(clean_str, "%I%p")
+        return dt
+    except ValueError:
+        pass
 
-    # PM Logic for College Schedule:
-    # 1, 2, 3, 4, 5, 6 -> Assume PM (13-18)
-    # 7, 8, 9, 10, 11 -> Assume AM
-    # 12 -> Noon
-    if 1 <= hour <= 6:
-        hour += 12
-    elif hour == 12:
-        pass  # Noon is 12
-
-    return hour
+    return None
 
 
-def parse_csv_and_import(csv_path, schedule_version_name="Spring 2025 Initial Import"):
+def get_hour_range(start_str, end_str):
+    start_dt = parse_time_string(start_str)
+    end_dt = parse_time_string(end_str)
+
+    if not start_dt or not end_dt:
+        return None  # Return None to signal failure
+
+    start_h = start_dt.hour
+    if start_dt.minute >= 30:
+        start_h += 1
+
+    end_h = end_dt.hour
+    if end_dt.minute >= 30:
+        end_h += 1
+
+    # Handle overnight shifts or PM/AM mixups if needed,
+    # but for now assume standard day order.
+    if end_h <= start_h:
+        # If end time is smaller (e.g. 1pm to 2pm -> 13 to 14), datetime handles 24h.
+        # But if the calc messed up, return empty.
+        pass
+
+    return list(range(start_h, end_h))
+
+
+def parse_csv_and_import(csv_path, schedule_version_name="Spring 2025 - Clean Import"):
     print(f"📂 Reading file: {csv_path}...")
     db = SessionLocal()
 
-    # --- A. Create the Schedule Container ---
     new_schedule = Schedule(version_name=schedule_version_name, status="draft")
     db.add(new_schedule)
     db.commit()
     db.refresh(new_schedule)
-    print(f"✅ Created Schedule: '{new_schedule.version_name}' (ID: {new_schedule.id})")
+    print(f"✅ Created Schedule: '{new_schedule.version_name}'")
 
-    # --- B. Load CSV ---
     try:
-        # Read header=None so we can find the real header dynamically
-        df = pd.read_csv(csv_path, header=None)
+        df = pd.read_csv(csv_path)
     except Exception as e:
         print(f"❌ Error reading CSV file: {e}")
         return
 
-    # --- C. Find the Header Row (Days of Week) ---
-    header_row_index = -1
-    col_map = {}  # Stores {column_index: "Monday", ...}
+    success_count = 0
+    error_count = 0
 
-    # Scan the first 10 rows to find "Monday"
-    for idx, row in df.head(10).iterrows():
-        row_str = str(row.values).lower()
-        if "monday" in row_str:
-            header_row_index = idx
-            # Map the columns
-            for col_idx, val in row.items():
-                val_str = str(val).strip()
-                for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
-                    if day in val_str:
-                        col_map[col_idx] = day
-            break
+    for index, row in df.iterrows():
+        # Get basic info
+        raw_name = str(row.get("Member", "")).strip()
 
-    if header_row_index == -1:
-        print("❌ Error: Could not find a row containing 'Monday'. Check the CSV format.")
-        return
+        # Skip empty rows
+        if not raw_name or raw_name.lower() == "nan":
+            continue
 
-    print(f"📅 Found Days: {list(col_map.values())}")
+        start_time_str = str(row.get("Start Time", ""))
+        end_time_str = str(row.get("End Time", ""))
+        start_date_str = str(row.get("Start Date", ""))
 
-    # --- D. Track Time State ---
-    # col_active_time tracks the current time block for each column index.
-    # We initialize everyone to "7:55" just in case.
-    col_active_time = {c: "7:55" for c in col_map}
+        # --- VALIDATION ---
+        # 1. Check Date
+        try:
+            date_obj = datetime.strptime(start_date_str, "%m/%d/%Y")
+            day_name = date_obj.strftime("%A")
+        except ValueError:
+            print(f"⚠️ SKIPPING Row {index + 2} ({raw_name}): Invalid Date '{start_date_str}'")
+            error_count += 1
+            continue
 
-    # --- E. Iterate Data Rows ---
-    # Start loop AFTER the header row
-    for index, row in df.iloc[header_row_index + 1:].iterrows():
+        # 2. Check Time
+        hours_covered = get_hour_range(start_time_str, end_time_str)
 
-        # 1. Check Global Time (Column 0) - usually for MWF
-        # Looks for "8:55-9:55a" pattern
-        first_col = str(row.values[0]).strip()
-        if pd.notna(row.values[0]) and any(char.isdigit() for char in first_col) and ('-' in first_col):
-            current_row_time_str = first_col.split('-')[0]  # Take start time
+        if hours_covered is None:
+            # THIS IS THE NEW PART: It prints exactly why it failed
+            print(
+                f"⚠️ SKIPPING Row {index + 2} ({raw_name}): Could not parse time '{start_time_str}' - '{end_time_str}'")
+            error_count += 1
+            continue
 
-            # Update MWF columns to this new time
-            for c, day in col_map.items():
-                if day in ["Monday", "Wednesday", "Friday", "Saturday", "Sunday"]:
-                    col_active_time[c] = current_row_time_str
+        # --- DATABASE ENTRY ---
+        employee = db.query(Employee).filter(Employee.name == raw_name).first()
+        if not employee:
+            email = str(row.get("Work Email", "")).strip()
+            if not email or email == "nan":
+                email = f"{raw_name.replace(' ', '.').lower()}@example.com"
 
-        # 2. Process Each Column
-        for col_idx, cell_val in row.items():
-            if col_idx not in col_map: continue
+            employee = Employee(name=raw_name, email=email)
+            db.add(employee)
+            db.commit()
+            db.refresh(employee)
 
-            raw_text = str(cell_val).strip()
-            if not raw_text or raw_text.lower() == "nan": continue
+        for h in hours_covered:
+            exists = db.query(ScheduleEntry).filter_by(
+                schedule_id=new_schedule.id,
+                employee_id=employee.employee_id,
+                day_of_week=day_name,
+                hour=h
+            ).first()
 
-            # CHECK FOR SPECIAL TUES/THURS MARKERS (e.g., ____9:20____)
-            marker_match = re.search(r'_+(\d{1,2}:\d{2})_+', raw_text)
-
-            if marker_match:
-                # Found a marker! Update this specific column's time
-                new_time = marker_match.group(1)
-                col_active_time[col_idx] = new_time
-
-                # Remove marker text to see if names are left
-                clean_text = re.sub(r'_+(\d{1,2}:\d{2})_+', '', raw_text).strip()
-                if not clean_text:
-                    continue  # It was just a marker, move on
-                raw_text = clean_text  # Names remain
-
-            # 3. Add Schedule Entries
-            names = re.split(r'[,\n]', raw_text)
-
-            # Convert current string time (e.g. "9:20") to integer (e.g. 9)
-            hour_int = parse_time_to_hour(col_active_time[col_idx])
-
-            if hour_int is None: continue
-
-            for name in names:
-                name = name.strip()
-                if not name: continue
-
-                # Find/Create Employee
-                employee = db.query(Employee).filter(Employee.name == name).first()
-                if not employee:
-                    email = f"{name.replace(' ', '.').lower()}@example.com"
-                    employee = Employee(name=name, email=email)
-                    db.add(employee)
-                    db.commit()
-                    db.refresh(employee)
-                    print(f"  👤 New Employee: {name}")
-
-                # Prevent duplicates
-                exists = db.query(ScheduleEntry).filter_by(
+            if not exists:
+                entry = ScheduleEntry(
                     schedule_id=new_schedule.id,
                     employee_id=employee.employee_id,
-                    day_of_week=col_map[col_idx],
-                    hour=hour_int
-                ).first()
-
-                if not exists:
-                    entry = ScheduleEntry(
-                        schedule_id=new_schedule.id,
-                        employee_id=employee.employee_id,
-                        day_of_week=col_map[col_idx],
-                        hour=hour_int
-                    )
-                    db.add(entry)
+                    day_of_week=day_name,
+                    hour=h
+                )
+                db.add(entry)
+                success_count += 1
 
     db.commit()
-    print("✨ Import complete! Database populated.")
     db.close()
+
+    print("-" * 40)
+    print(f"🏁 Import Finished.")
+    print(f"✅ Successful Entries: {success_count}")
+    if error_count > 0:
+        print(f"❌ Skipped Rows: {error_count} (See warnings above)")
+    else:
+        print("🎉 No errors found!")
 
 
 if __name__ == "__main__":
-    # Ensure this matches your specific filename
-    csv_filename = "Spring 2025 Semester Scedule copy(BLK 3 Printout).csv"
-
+    csv_filename = "improvedschedule.csv"
     if os.path.exists(csv_filename):
         parse_csv_and_import(csv_filename)
     else:
         print(f"❌ Error: Could not find '{csv_filename}'")
-        print("Make sure the file is in the same folder as this script.")
